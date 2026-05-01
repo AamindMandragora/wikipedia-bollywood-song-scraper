@@ -11,11 +11,17 @@ The scraper walks Wikipedia's yearly index pages (`List of Hindi films of 20XX`)
 - **Rowspan/colspan resolution** — builds a full 2-D grid from each HTML table so column indices stay correct even when a music director cell spans an entire album.
 - **Two-pass column detection** — claims lyricist, singer, composer, and duration columns first, then identifies the song title from whatever remains. This prevents lyrics columns from being misidentified as titles, which was a persistent early bug.
 - **`<th scope="row">` awareness** — picks up song titles stored in header cells rather than data cells. Common pattern in modern soundtrack tables.
-- **Three fallback strategies** — tries structured table extraction first, then bulleted lists under "Soundtrack" or "Songs" headings.
+- **Four fallback strategies** — tries structured table extraction first, then bulleted lists under "Soundtrack" or "Songs" headings, then follows "Main article" links to dedicated soundtrack sub-pages (see below).
+
+## Soundtrack sub-page following
+
+Some high-profile films (e.g. Dhurandhar) describe their soundtrack in prose on the main article and keep the actual tracklist table on a separate Wikipedia page like `Film Name (soundtrack)`. The scraper detects `<div class="hatnote">` links pointing to these soundtrack articles and follows them automatically, running the same table-extraction logic on the sub-page. This fires as a fourth fallback only when the first three strategies find nothing on the main film page.
 
 ## Filtering
 
 Not every link on a year page points to a film. The scraper uses infobox field detection and category heuristics to skip bios, plays, and disambiguation pages. Within film pages, it excludes navbox/sidebar/infobox tables, non-Hindi language sections, and discography/awards/controversy tables. Song tables are capped at 40 rows to avoid scraping filmography lists disguised as tracklists.
+
+Album-summary rows (e.g. "Total length", "Total duration") are rejected at the title-validation stage so they never appear as song entries in the output.
 
 Cell-level cleanup strips citation brackets, a.k.a. suffixes, smart quotes, and concatenated composer–lyricist names (e.g. `Bappi LahiriAnjaan` → `Bappi Lahiri`).
 
@@ -33,13 +39,14 @@ pip install requests beautifulsoup4
 python scraper.py
 ```
 
-The scraper writes incrementally — you can kill it and restart without losing progress. Adjust `MAX_WORKERS`, `SLEEP_PER_FILM`, and `SLEEP_PER_YEAR` at the top of the file if you want to tune throughput vs. politeness.
+The scraper writes incrementally — you can kill it and restart without losing progress. Adjust `MAX_WORKERS`, `SLEEP_PER_FILM`, and `SLEEP_PER_YEAR` at the top of the file to tune throughput vs. politeness.
 
 ## Known limitations
 
 - Wikipedia coverage is sparse for pre-1940s films. Many early talkies don't have soundtrack tables, so they'll show up in the no-songs audit log but not in the main CSV.
 - Song data quality depends entirely on what Wikipedia editors have entered. Some pages have full singer/composer metadata, others just have titles.
 - The year-page table detection uses a scoring heuristic that can miss tables with unusual layouts. If a year returns zero films, check the page structure manually.
+- Soundtrack sub-page following only works when the main film article contains a hatnote linking to the dedicated soundtrack page. If the link is buried in prose or uses non-standard formatting, it won't be detected.
 
 ## Output format
 
@@ -51,4 +58,4 @@ The scraper writes incrementally — you can kill it and restart without losing 
 | Singer   | Playback singer(s), comma-separated if multiple  |
 | Composer | Music director / composer                        |
 
-Films that pass the `page_is_film` check but yield no songs are logged to `no_songs_log.csv` for manual review.
+Films that pass the `page_is_film` check but yield no songs are logged to `no_songs.csv` for manual review.
